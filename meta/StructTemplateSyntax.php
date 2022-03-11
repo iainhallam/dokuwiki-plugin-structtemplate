@@ -94,6 +94,9 @@ class StructTemplateSyntax extends SyntaxPlugin
         // -1: ignore last line containing closing tag
         $template = implode("\n", array_slice($lines, $template_start_index, -1));
 
+        // Check flags
+        $options['html'] = (preg_match('/\bhtml\b/', strtolower($lines[0])) === 1); //FIXME: check if HTML is allowed
+
         // Configure the Struct search
         // -------------------------------------------------------------
 
@@ -116,7 +119,7 @@ class StructTemplateSyntax extends SyntaxPlugin
         // Re-enable section editing
         $conf['maxseclevel'] = $old_maxseclevel;
 
-        return [$search_config, $template];
+        return [$search_config, $template, $options];
     }
 
     /**
@@ -133,6 +136,7 @@ class StructTemplateSyntax extends SyntaxPlugin
     {
         $search_config = $data[0];
         $template      = $data[1];
+        $options       = $data[2];
 
         // Access global configuration settings
         global $conf;
@@ -195,9 +199,13 @@ class StructTemplateSyntax extends SyntaxPlugin
                 $interpolated .= $next_output;
             }
 
-            // Rendering needs an array to write
-            $html_info = [];
-            $html = p_render($mode, p_get_instructions($interpolated), $html_info);
+            if ($conf['htmlok'] == true and $options['html'] == true) {
+                $html = $interpolated;
+            } else {
+                // Rendering needs an array to write
+                $html_info = [];
+                $html = p_render($mode, p_get_instructions($interpolated), $html_info);
+            }
 
             // Send to document
             $renderer->doc .= $html;

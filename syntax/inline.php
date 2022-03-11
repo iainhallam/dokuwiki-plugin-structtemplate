@@ -18,6 +18,16 @@ use dokuwiki\plugin\structtemplate\meta\StructTemplateSyntax;
 class syntax_plugin_structtemplate_inline extends StructTemplateSyntax
 {
     /**
+     * Define the precedence of this plugin to the parser
+     *
+     * @see  https://www.dokuwiki.org/devel:parser:getsort_list
+     */
+    public function getSort()
+    {
+        return 46;
+    }
+
+    /**
      * Define how this plugin handles paragraphs
      *
      * @see  https://www.dokuwiki.org/devel:syntax_plugins#ptype
