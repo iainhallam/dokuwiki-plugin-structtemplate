@@ -11,7 +11,9 @@
     <ini name="memory_limit" value="-1"/>
 
     <!-- where to look -->
-    <file>syntax.php</file>
+    <file>meta/StructTemplateSyntax.php</file>
+    <file>syntax/block.php</file>
+    <file>syntax/inline.php</file>
 
     <!-- skip these completely -->
     <exclude-pattern>lang/*/lang.php</exclude-pattern>
@@ -29,6 +31,7 @@
 
     <!-- disable some rules for certain paths, for legacy support -->
     <rule ref="Squiz.Classes.ValidClassName.NotCamelCaps">
-        <exclude-pattern>syntax.php</exclude-pattern>
+        <exclude-pattern>syntax/block.php</exclude-pattern>
+        <exclude-pattern>syntax/inline.php</exclude-pattern>
     </rule>
 </ruleset>

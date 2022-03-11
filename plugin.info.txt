@@ -1,7 +1,7 @@
 base structtemplate
 author Iain Hallam
 email iain@nineworlds.net
-date 2022-01-20
+date 2022-03-11
 name Struct Template
 desc Use struct data to fill in a template, as many times as there are results.
 url https://www.dokuwiki.org/plugin:structtemplate

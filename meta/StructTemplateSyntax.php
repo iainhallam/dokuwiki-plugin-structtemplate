@@ -1,7 +1,7 @@
 <?php
 
 /**
- * DokuWiki plugin Struct Template
+ * DokuWiki plugin Struct Template generic syntax
  *
  * @author     Iain Hallam <iain@nineworlds.net>
  * @copyright  © 2022 Iain Hallam
@@ -10,21 +10,28 @@
 
 declare(strict_types=1);
 
-use dokuwiki\plugin\struct\meta\Column;
+namespace dokuwiki\plugin\structtemplate\meta;
+
+use Doku_Handler;
+use Doku_Renderer;
+use dokuwiki\Extension\SyntaxPlugin;
 use dokuwiki\plugin\struct\meta\ConfigParser;
 use dokuwiki\plugin\struct\meta\SearchConfig;
 use dokuwiki\plugin\struct\meta\StructException;
-use dokuwiki\plugin\struct\meta\Value;
 
 /**
  * Syntax plugin extending standard DokuWiki class
  */
-class syntax_plugin_structtemplate extends DokuWiki_Syntax_Plugin
+class StructTemplateSyntax extends SyntaxPlugin
 {
-    /** @var  string  The tag to be used in Wiki markup between < and > */
-    public const TAG    = 'struct-template';
-    /** @var  string  The system name of the plugin */
-    public const PLUGIN = 'structtemplate';
+    /** @var  string  TAG             The tag to be used in Wiki markup between < and > */
+    /** @var  string  PLUGIN          The system name of the plugin */
+    /** @var  string  OPEN_SYNTAX     Interpolation syntax */
+    /** @var  string  CLOSE_SYNTAX    Interpolation syntax */
+    public const TAG            = 'struct-template';
+    public const PLUGIN         = 'structtemplate';
+    public const OPEN_SYNTAX    = '{{$$';
+    public const CLOSE_SYNTAX   = '}}';
 
     /**
      * Define the type of syntax plugin
@@ -36,33 +43,6 @@ class syntax_plugin_structtemplate extends DokuWiki_Syntax_Plugin
         return 'substition';
     }
 
-    // /**
-    //  * Define the allowed types of syntax within this plugin
-    //  *
-    //  * @see  https://www.dokuwiki.org/devel:syntax_plugins#allowed_modes
-    //  */
-    // public function getAllowedTypes()
-    // {
-    //     return [
-    //         'container',
-    //         'disabled',
-    //         'formatting',
-    //         'paragraphs',
-    //         'protected',
-    //         'substition',
-    //     ];
-    // }
-
-    /**
-     * Define how this plugin handles paragraphs
-     *
-     * @see  https://www.dokuwiki.org/devel:syntax_plugins#ptype
-     */
-    public function getPType()
-    {
-        return 'normal';
-    }
-
     /**
      * Define the precedence of this plugin to the parser
      *
@@ -71,33 +51,6 @@ class syntax_plugin_structtemplate extends DokuWiki_Syntax_Plugin
     public function getSort()
     {
         return 45;
-    }
-
-    /**
-     * Connect lookup patterns to lexer
-     *
-     * Syntax:
-     * <struct-template>
-     * ---- data ----
-     * [...]
-     * ----
-     * [...]{{$$schema.field ? raw}}[...]
-     * </struct-template>
-     *
-     * @see  https://www.dokuwiki.org/devel:syntax_plugins#patterns
-     *
-     * @param  string  $lmode  Existing lexer mode
-     */
-    public function connectTo($lmode)
-    {
-        // The opening tag and lookup, and lookahead to ensure closing tag
-        $pattern = '<' . self::TAG . '>\n*----+ *data *-+\n.*?\n----+.*?<\/' . self::TAG . '>';
-
-        $this->Lexer->addSpecialPattern(
-            $pattern,                 // regex
-            $lmode,                   // lexer mode to use in
-            'plugin_' . self::PLUGIN  // lexer mode to enter
-        );
     }
 
     /**
@@ -113,8 +66,17 @@ class syntax_plugin_structtemplate extends DokuWiki_Syntax_Plugin
      */
     public function handle($match, $state, $position, Doku_Handler $handler): array
     {
+        // Configuration
+        // -------------------------------------------------------------
+
         // Access global configuration settings
         global $conf;
+        // Disable section editing for the template
+        $old_maxseclevel = $conf['maxseclevel'];
+        $conf['maxseclevel'] = 0;
+
+        // Extract the data block and template
+        // -------------------------------------------------------------
 
         $template_start_index = 0;
         // Reduce match to Struct search config
@@ -129,22 +91,32 @@ class syntax_plugin_structtemplate extends DokuWiki_Syntax_Plugin
 
             $struct_syntax[] = $lines[$line_index];
         }
-
-        // Extract template, ignoring last line containing closing tag
+        // -1: ignore last line containing closing tag
         $template = implode("\n", array_slice($lines, $template_start_index, -1));
+
+        // Configure the Struct search
+        // -------------------------------------------------------------
 
         try {
             $parser = new ConfigParser($struct_syntax);
-            $config = $parser->getConfig();
+            $search_config = $parser->getConfig();
         } catch (StructException $e) {
             msg($e->getMessage(), -1, $e->getLine(), $e->getFile());
             if ($conf['allowdebug']) {
                 msg('<pre>' . hsc($e->getTraceAsString()) . '</pre>', -1);
             }
+            // Re-enable section editing
+            $conf['maxseclevel'] = $old_maxseclevel;
             return [];
         }
 
-        return [$config, $template];
+        // Return data for rendering
+        // -------------------------------------------------------------
+
+        // Re-enable section editing
+        $conf['maxseclevel'] = $old_maxseclevel;
+
+        return [$search_config, $template];
     }
 
     /**
@@ -159,16 +131,19 @@ class syntax_plugin_structtemplate extends DokuWiki_Syntax_Plugin
      */
     public function render($mode, Doku_Renderer $renderer, $data): bool
     {
+        $search_config = $data[0];
+        $template      = $data[1];
+
         // Access global configuration settings
         global $conf;
 
-        // Unpack data from handler
-        $config   = $data[0];
-        $template = $data[1];
+        // Disable section editing for the template
+        $old_maxseclevel = $conf['maxseclevel'];
+        $conf['maxseclevel'] = 0;
 
         // Run the search (can't be in handler as that is cached)
         try {
-            $search = new SearchConfig($config);
+            $search = new SearchConfig($search_config);
 
             // Get all matching data, no pagination
             $search->setLimit(0);
@@ -182,27 +157,31 @@ class syntax_plugin_structtemplate extends DokuWiki_Syntax_Plugin
             if ($conf['allowdebug']) {
                 msg('<pre>' . hsc($e->getTraceAsString()) . '</pre>', -1);
             }
+
+            // Re-enable section editing
+            $conf['maxseclevel'] = $old_maxseclevel;
+
             return false;
         }
 
         // Construct a lookup table for column names and indices in the result
         $columns = $search->getColumns();
-        foreach ($columns as $column) {
+        foreach ($columns as $index => $column) {
+            $column_id = $column->getFullQualifiedLabel(false);
             // getFullColumnName takes false to disable enforceSingleColumn
-            // - 1 because columns are 1-indexed, while arrays are 0-indexed
-            $column_indices[$column->getFullQualifiedLabel(false)] = $column->getColref() - 1;
+            $column_indices[$column_id] = $index;
         }
 
         foreach ($struct_data as $row_index => $row) {
-            $chunks = explode('{{$', $template);
+            $chunks = explode(self::OPEN_SYNTAX, $template);
 
             // First entry contains no fields
             $interpolated = $chunks[0];
             $chunks = array_slice($chunks, 1);
 
             foreach ($chunks as $chunk) {
-                // Since the string was exploded on {{$, this must start with a field
-                $chunk_parts    = explode('}}', $chunk, 2);
+                // Since the string was exploded on the open marker, this must start with a field
+                $chunk_parts    = explode(self::CLOSE_SYNTAX, $chunk, 2);
                 $column_request = $chunk_parts[0];
                 $next_output    = $chunk_parts[1];
 
@@ -210,15 +189,22 @@ class syntax_plugin_structtemplate extends DokuWiki_Syntax_Plugin
                     $interpolated .= $row[$column_indices[$column_request]]->getDisplayValue();
                 } else {
                     if ($this->getConf('show_not_found')) {
-                        $this->renderer->cdata($this->helper->getLang('none'));
+                        $renderer->cdata($this->getLang('none'));
                     }
                 }
                 $interpolated .= $next_output;
             }
 
+            // Rendering needs an array to write
+            $html_info = [];
+            $html = p_render($mode, p_get_instructions($interpolated), $html_info);
+
             // Send to document
-            $renderer->doc .= $interpolated;
+            $renderer->doc .= $html;
         }
+
+        // Re-enable section editing
+        $conf['maxseclevel'] = $old_maxseclevel;
 
         return true;
     }
